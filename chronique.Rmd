@@ -8,7 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE)
 ```
 
 ```{r preparation}
@@ -159,3 +159,10 @@ leaflet(width = 900, height = 800) %>%
 
 
 ```
+
+
+## Boite noire
+
+Comme d'habitude, le code et les données nécessaires pour répliquer cette chronique sont [disponibles sur github](https://github.com/joelgombin/chronique_siren). 
+
+La base SIRET étant alimentée par des déclarations obligatoires, on peut raisonnablement penser qu'elle est exhaustive. En revanche, il n'y a pas d'obligation de signaler la disparition d'un établissement ; par conséquent, on y trouve des établissements qui sont en réalité disparus. De plus, la qualité des données est parfois soumise à caution. Par exemple, certaines entreprises localisent tous leurs salariés à leur siège social, soit en ne déclarant aucun salarié dans les autres établissements (c'est le cas du CNRS par exemple), soit en déclarant une seconde fois les salariés dans les autres établissements (c'est le cas de la Ville de Marseille), risquant ainsi si on n'y prend garde de provoquer un double compte.
