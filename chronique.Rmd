@@ -1,0 +1,161 @@
+---
+title: "Les sirènes de l'économie métropolitaine"
+author: "Joël Gombin"
+date: "13 janvier 2017"
+output: 
+  html_document:
+    self_contained: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r preparation}
+options(OutDec = ",", scipen = 10)
+library(MonetDBLite)
+library(tidyverse)
+conn <- src_monetdblite("~/monetdb")
+sirene <- tbl(conn, from = "sirene")
+appartenance <- tbl(conn, from = "appartenance-geo-communes-16") 
+nomenclature <- tbl(conn, from = "nomenclature-supracommunal-16") %>% collect()
+metropole <- appartenance %>% 
+  filter(EPCI == "200054807") 
+
+sirene_metropole <- sirene %>% 
+  mutate(CODGEO = DEPET %||% COMET) %>% 
+  inner_join(metropole, by = c("CODGEO" = "CODGEO"))
+```
+
+Le 1er janvier (enfin, quelques jours plus tard, mais ne chipotons pas), l'INSEE a publié [la base SIRENE](https://www.data.gouv.fr/fr/datasets/base-sirene-des-entreprises-et-de-leurs-etablissements-siren-siret/). [C'est peut-être un détail pour vous, mais pour ceux qui aiment les data, ça veut dire beaucoup](https://www.youtube.com/watch?v=N6yobV8KiQY). Outre les jeux de mots innombrables qu'elle permet (je présente mes excuses formelles au peuple des lecteurs de Marsactu pour la faiblesse de celui qui sert de titre à cette chronique), la base de données SIRENE est intéressante, et son ouverture réclamée de longue date, car elle porte sur l'ensemble des entreprises françaises. Mieux même, elle identifie chaque établissement (c'est-à-dire, théoriquement, chaque lieu dans lequel est exercée une activité). On compte pas moins de dix millions d'établissements en France. Avec la base SIRENE, c'est ainsi le tissu économique du pays qu'on peut décrire et analyser. Bien sûr, l'ouverture de ces données ouvre également la voie à [de nombreux nouveaux services](https://www.insee.fr/fr/information/2509465). À titre d'exemple, il va être aisé de faire en sorte que chaque entreprise française soit désormais répertoriée sur Wikipedia, automatiquement.
+Mais je sais, cher lecteur, que vous n'êtes pas venu jusqu'ici pour subir une leçon sur les bienfaits de l'open data (oui, je vous vouvoie, ô lecteur, mettons ça ainsi que mes goûts musicaux sur le compte d'un vieillissement mental accéléré). Alors allons-y et voyons ce que ces données peuvent nous apprendre sur notre beau territoire métropolitain (caractérisé par ["l'audace par nature"](http://www.lamarseillaise.fr/bouches-du-rhone/flash/56332-la-metropole-aix-marseille-provence-presente-sa-nouvelle-identite-visuelle), paraît-il).
+
+La métropole Aix-Marseille-Provence compte, au 1er janvier 2017, `r sirene_metropole %>% count() %>% collect %>% magrittr::extract2("n")` établissements, appartenant à `r sirene_metropole %>% distinct(SIREN) %>% tally %>% collect %>% magrittr::extract2("n")` entreprises. Évidemment, la grande majorité des entreprises ne comptent qu'un établissement, leur siège social, et ne comptent pas de salariés (c'est le cas de `r (sirene_metropole %>% filter(TEFET == "NN" | TEFET == "00") %>% count() %>% collect %>% magrittr::extract2("n") / sirene_metropole %>% count() %>% collect %>% magrittr::extract2("n") * 100) %>% round(1)` % des établissements - la plupart sont des autoentrepreneurs, mais on y trouve également beaucoup de SCI et d'associations) ou en comptent un ou deux (`r (sirene_metropole %>% filter(TEFET == "01") %>% count() %>% collect %>% magrittr::extract2("n") / sirene_metropole %>% count() %>% collect %>% magrittr::extract2("n") * 100) %>% round(1)` % des établissements). À l'inverse, on trouve quelques mastodontes, comme le montre le tableau ci-dessous. 
+
+```{r grosses_entreprises}
+# sirene_metropole %>% 
+#   filter(DEFET >= "2010") %>% 
+#   group_by(SIREN) %>% 
+#   summarise(EFETCENT = sum(as.integer(EFETCENT))) %>% 
+#   arrange(desc(EFETCENT)) %>% 
+#   filter(between(row_number(), 1, 20)) %>% 
+#   collect() %>% 
+#   left_join(sirene_metropole %>% 
+#               distinct(SIREN, NOMEN_LONG) %>% 
+#               collect(n = Inf), 
+#             by = ("SIREN" = "SIREN")
+#            )
+
+knitr::kable(tribble(~Nom, ~Effectif,
+                     "APHM (Hôpitaux de Marseille)", 18300,
+                     "Ville de Marseille", 13700,
+                     "Airbus Helicopters", 9400,
+                     "Aix-Marseille Université", 8000,
+                     "Département des Bouches-du-Rhône", 7600,
+                     "Région PACA", 6100,
+                     "La Poste", 6000,
+                     "Direction départementale de la sécurité publique", 4100,
+                     "RTM", 3500,
+                     "Hôpital d'Aix-en-Provence", 3100,
+                     "Ville d'Aix-en-Provence", 3000,
+                     "Carrefour", 2800,
+                     "ArcelorMittal", 2700,
+                     "STMicroElectronics", 2600,
+                     "ONET Services", 2500,
+                     "EDF", 2500,
+                     "CEA", 2500,
+                     "SNCF Mobilités", 2400,
+                     "Hôpital Saint-Joseph", 2300,
+                     "Ville de Martigues", 2100
+                     ))
+
+## Problème : dans certains cas, le nombre d'employés total de l'entreprise est également affecté à son siège (ex : APHM)
+## Du coup nécessaire de vérifier manuellement et de le cas échéant prendre les effectifs affichés pour l'entreprise (EFENCENT)
+
+```
+
+Les plus gros établissements de la métropole sont majoritairement publics : les hôpitaux de l'APHM (plus de 18300 salariés), la ville de Marseille (autour de 13700 agents), le Conseil départemental (7600 agents), le Conseil régional (plus de 6100 agents) ou encore la RTM (3500 agents). Notons que l'État n'est pas absent de ce palmarès, au travers des plus de 4100 agents de la DDSP (en clair, des policiers). On trouve également les employeurs publics aixois : 3100 agents à l'hôpitel d'Aix, 3000 à la ville d'Aix (ce qui représente, au passage, plutôt plus d'agents par habitant qu'à Marseille, qu'on décrit toujours comme suradministrée !). La Ville de Martigues, longtemps riche de son abondante taxe professionnelle et attachée à un communisme municipal généreux en services publics, affiche plus de 2100 agents. 
+
+Mais on trouve également sur le territoire de la métropole de gros employeurs privés : Airbus Helicopters (ex Eurocopter) se classe ainsi au premier rang de ces employeurs privés, avec plus de 9400 salariés. La Poste compte plus de 6000 salariés dans la métropole. Carrour, à travers ses différentes enseignes, compte plus de 2800 salariés dans la métropole. On trouve ensuite l'usine ArcelorMittal de Fos-sur-Mer, qui compte plus de 2700 salariés malgré [un avenir en demi-teinte](https://marsactu.fr/a-fos-sur-mer-les-salaries-darcelor-mittal-voit-lavenir-en-gris/), ou encore STMicroElectronics et ses 2600 salariés. Moins attendu peut-être, mais qui illustre le poids important et croissant des services aux entreprises dans l'économie métropolitaine : ONET Services, l'entreprise de nettoyage, compte plus de 2500 salariés dans la métropole. Soit autant qu'EDF ou le CEA, et davantage que la SNCF (plus de 2400 salariés). L'hôpital marseillais Saint-Joseph (qui est une association de droit privé) ferme la marche avec plus de 2300 salariés, et renforce ainsi le poids du secteur hospitalier dans l'économie de la métropole.  
+
+Même si l'INSEE pointe que notre métropole est plutôt en retard du point de vue des "fonctions métropolitaines supérieures", l'enseignement supérieur et la recherche constituent des employeurs importants dans la métropole. Aix-Marseille Université compte plus de 8000 agents (les enseignants-chercheurs comptent pour environ la moitié de ces effectifs), ce qui en fait le quatrième employeur de la métropole. Le CEA aligne pas moins de 2500 salariés à Cadarache. Le CNRS est également un employeur important, mais la base SIRENE ne permet pas de savoir combien exactement de chercheurs sont employés dans la métropole (les 2400 employés du CNRS dans la région Provence-Corse sont statistiquement rattachés au siège régional).
+
+Qui a le meilleur maillage territorial dans la métropole ? On peut essayer de l'approcher en regardant le nombre d'établissements dont dispose chaque entreprise ou entité dans la métropole. La ville de Marseille est championne toutes catégories, avec pas moins de 584 établissements enregistrés (dont [444 écoles](http://education.marseille.fr/maternelle-et-elementaire-presentation)) ! On trouve également sur le podium La Poste (228 établissements -- pas seulement des bureaux de poste, donc, mais aussi des centres de tris, des bureaux, etc.) et la Caisse d'épargne (156 établissements). Le Conseil général compte lui pas moins de 145 établissements (quand on vous dit que c'est une collectivité de proximité ! Il faut bien sûr compter les collèges dans ce nombre), le groupe Casino Distribution 136 établissements (Casino, Monoprix, Franprix...) et le Crédit agricole 122. 
+
+```{r maillage, include=FALSE}
+
+sirene_metropole %>% 
+  group_by(SIREN) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  filter(between(row_number(), 1, 20)) %>% 
+  collect() %>%
+  left_join(sirene_metropole %>%
+              distinct(SIREN, NOMEN_LONG) %>%
+              collect(n = Inf),
+            by = ("SIREN" = "SIREN")
+           )
+
+```
+
+
+Finissons cette petite exploration d'un jeu de données (qui, il faut le signaler, n'est pas toujours de très bonne qualité -- espérons que son ouverture permettra de l'améliorer) en cartographiant la distribution des établissements de la métropole qui comptent au moins un salarié - en gros, les endroits où on travaille dans notre métropole. Vue de loin, cette carte permet d'identifier les grands centres d'installation des entreprises dans la métropole ; vue de près, elle permet d'identifier les quartiers, les rues où sont installés de nombreux établissements. Les pixels de couleur correspondent
+
+```{r carte}
+etabs <- sirene_metropole %>% 
+  filter(DEFET >= "2010") %>% 
+  filter(TEFET != "NN" & TEFET != "00") %>% 
+  filter(!is.na(TEFET)) %>% 
+  collect %>% 
+  as.data.frame()
+codes <- tribble(
+  ~ Code, ~ Label, 
+  "01", "1 ou 2 salariés", 
+  "02", "3 à 5 salariés", 
+  "03", "6 à 9 salariés", 
+  "11", "10 à 19 salariés", 
+  12, "20 à 49 salariés",
+  21, "50 à 99 salariés",
+  22, "100 à 199 salariés",
+  31, "200 à 249 salariés",
+  32, "250 à 499 salariés",
+  41, "500 à 999 salariés",
+  42, "1 000 à 1 999 salariés",
+  51, "2 000 à 4 999 salariés",
+  52, "5 000 à 9 999 salariés",
+  53, "10 000 salariés et plus"
+)
+etabs <- left_join(etabs, codes, by = c("TEFET" = "Code"))
+library(sp)  
+library(leaflet)
+library(leaflet.extras)
+etabs <- SpatialPointsDataFrame(etabs[, c("longitude", "latitude")], etabs, proj4string = CRS("+init=epsg:4326"))
+
+# geojsonio::geojson_write(etabs, file = "etabs.geojson")
+
+library(tmap)
+library(tmaptools)
+
+etabs <- set_projection(etabs, projection = CRS("+init=epsg:2154"))
+
+
+etabs$effectif <- as.integer(etabs$EFETCENT)
+
+grille <- raster::raster(etabs, nrows = 1200, ncols = 1200)
+grille <- raster::rasterize(etabs, grille, field = "effectif", fun = "sum", na.rm = TRUE)
+
+
+
+pal <- colorBin(viridis::magma(10), domain = NULL, bins = c(0, 1, 5, 10, 20, 50, 100, 1000, 10000, 18500), na.color = "#00000000")
+
+leaflet(width = 900, height = 800) %>% 
+  addProviderTiles("CartoDB.DarkMatter") %>% 
+  addRasterImage(x = grille, opacity = 0.7, colors = pal, attribution = "Réalisation J. Gombin pour Marsactu") %>% 
+  addLegend(pal = pal, values = c(0, 1, 5, 10, 20, 50, 100, 1000, 10000, 18500), na.label = NA, title = "Nombre d'emplois") %>% 
+  addFullscreenControl()
+
+
+
+
+
+```
