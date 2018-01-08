@@ -10,7 +10,7 @@ tmp <- tempdir()
 
 conn <- src_monetdblite("~/monetdb")
 
-for (i in c(str_pad(c(1:19, 21:95), width = 2, side = "left", pad = "0"), "2A", "2B")) {
+for (i in c(str_pad(c(1:19, 21:74, 76:95), width = 2, side = "left", pad = "0"), "2A", "2B", 75101:75120, 971:976, 98, 99)) {
   httr::GET(paste0(url_base, i, ".csv.7z"), httr::write_disk(paste0(tmp, "/geo-sirene_", i, ".csv.7z"), overwrite = TRUE))
   system(paste0('7z e -o', tmp, " ", tmp, "/geo-sirene_", i, ".csv.7z"))
   tmp_csv <- read_csv(paste0(tmp, "/geo-sirene_", i, ".csv"), na = c("NR", "NN"), col_types = cols(.default = col_character(),
